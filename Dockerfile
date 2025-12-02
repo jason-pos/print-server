@@ -3,6 +3,9 @@
 
 FROM node:20-alpine AS builder
 
+# Use Singapore mirror for faster downloads in SEA region
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirror.0x.sg/g' /etc/apk/repositories
+
 # Install build dependencies
 RUN apk add --no-cache \
     python3 \
@@ -22,6 +25,9 @@ RUN npm ci --only=production
 
 # Production stage
 FROM node:20-alpine
+
+# Use Singapore mirror for faster downloads in SEA region
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirror.0x.sg/g' /etc/apk/repositories
 
 # Install runtime dependencies for USB support
 RUN apk add --no-cache \

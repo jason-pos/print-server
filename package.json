@@ -1,0 +1,29 @@
+{
+	"name": "xi-print-server",
+	"version": "2.0.0",
+	"description": "Print server for XiPOS with USB and Network thermal printer support",
+	"main": "src/server.js",
+	"scripts": {
+		"start": "node src/server.js",
+		"dev": "nodemon src/server.js",
+		"test": "node src/test-print.js"
+	},
+	"keywords": [
+		"pos",
+		"printer",
+		"thermal",
+		"receipt",
+		"escpos"
+	],
+	"author": "",
+	"license": "MIT",
+	"dependencies": {
+		"cors": "^2.8.5",
+		"dotenv": "^16.4.5",
+		"express": "^4.21.2",
+		"morden-node-escpos": "latest"
+	},
+	"devDependencies": {
+		"nodemon": "^3.1.9"
+	}
+}

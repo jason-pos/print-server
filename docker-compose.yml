@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  xi-print-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: xipos/print-server:latest
+    container_name: xi-print-server
+    restart: unless-stopped
+
+    # Port mapping
+    ports:
+      - "${PORT:-3344}:3344"
+
+    # Environment variables from .env file
+    env_file:
+      - .env
+
+    # USB device access for thermal printers
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+
+    # Privileged mode for USB access (required for thermal printers)
+    privileged: true
+
+    # Volume mounts
+    volumes:
+      # Mount .env for configuration
+      - ./.env:/app/.env:ro
+      # Persist logs (optional)
+      - ./logs:/app/logs
+
+    # Network mode
+    network_mode: bridge
+
+    # Resource limits (optional)
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3344/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  default:
+    name: xipos-network
+    external: false

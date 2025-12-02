@@ -1,0 +1,53 @@
+# Node modules
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files (will be mounted)
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git files
+.git/
+.gitignore
+.gitattributes
+
+# Documentation (not needed in container)
+*.md
+!README.md
+
+# Test files
+test/
+*.test.js
+*.spec.js
+
+# Docker files (not needed in image)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Scripts (not needed in container)
+verify-setup.sh
+restart-with-permissions.sh
+
+# Temporary files
+tmp/
+temp/
+*.tmp

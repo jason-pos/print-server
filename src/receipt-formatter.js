@@ -99,7 +99,7 @@ function formatReceipt(orderData) {
 		lines.push(itemName);
 
 		const qty = parseFloat(item.quantity || 1);
-		const price = parseFloat(item.price || 0);
+		const price = parseFloat(item.sell_price || 0);
 		const total = qty * price;
 
 		const qtyText = `${qty} x ${formatCurrency(price)}`;
@@ -192,12 +192,12 @@ function createTestReceipt() {
 			{
 				product_name: 'Test Product 1',
 				quantity: 2,
-				price: 10.50
+				sell_price: 10.50
 			},
 			{
 				product_name: 'Test Product 2',
 				quantity: 1,
-				price: 25.00
+				sell_price: 25.00
 			}
 		],
 		subtotal: 46.00,

@@ -4,6 +4,19 @@ const { config } = require('./config.js');
 const { printReceipt, printTest } = require('./print-handler.js');
 const { testPrinter } = require('./printer.js');
 
+// Global error handlers to prevent crashes
+process.on('uncaughtException', (error) => {
+	console.error('Uncaught Exception:', error.message);
+	console.error(error.stack);
+	// Don't exit - keep the server running
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+	console.error('Unhandled Rejection at:', promise);
+	console.error('Reason:', reason);
+	// Don't exit - keep the server running
+});
+
 const app = express();
 
 // Middleware

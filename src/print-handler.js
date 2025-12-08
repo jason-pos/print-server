@@ -1,5 +1,5 @@
 const { Printer } = require('morden-node-escpos');
-const { initPrinter } = require('./printer.js');
+const { initPrinter, resetPrinter } = require('./printer.js');
 const { formatReceipt } = require('./receipt-formatter.js');
 const { config } = require('./config.js');
 
@@ -7,71 +7,90 @@ const { config } = require('./config.js');
  * Print receipt
  */
 async function printReceipt(orderData) {
-	return new Promise(async (resolve, reject) => {
-		let adapter = null;
+	let adapter = null;
 
-		try {
-			// Initialize printer
-			adapter = await initPrinter();
+	try {
+		// Initialize printer
+		adapter = await initPrinter();
 
-			// Format receipt content
-			const receiptLines = formatReceipt(orderData);
+		// Format receipt content
+		const receiptLines = formatReceipt(orderData);
 
-			if (config.debug) {
-				console.log('Receipt content:');
-				console.log(receiptLines.join('\n'));
-			}
+		if (config.debug) {
+			console.log('Receipt content:');
+			console.log(receiptLines.join('\n'));
+		}
 
-			// Open adapter and print
-			adapter.open(function(error) {
-				if (error) {
-					reject(new Error(`Failed to open printer: ${error.message}`));
-					return;
-				}
+		// Open adapter and print
+		return new Promise((resolve, reject) => {
+			const timeout = setTimeout(() => {
+				resetPrinter();
+				reject(new Error('Print operation timeout'));
+			}, 15000);
 
-				const printer = new Printer(adapter, {
-					encoding: 'GB18030',
-					width: config.receipt.paperWidth
-				});
+			try {
+				adapter.open(function(error) {
+					if (error) {
+						clearTimeout(timeout);
+						resetPrinter();
+						reject(new Error(`Failed to open printer: ${error.message}`));
+						return;
+					}
 
-				try {
-					// Print each line
-					receiptLines.forEach(line => {
-						// Check if line should be centered (headers, footers)
-						if (line.includes('='.repeat(10)) ||
-							line.includes('Thank you') ||
-							line.includes('Please come') ||
-							(config.receipt.storeName && line.includes(config.receipt.storeName))) {
-							printer.align('ct').text(line);
-						} else if (line.startsWith('TOTAL:') || line.startsWith('Subtotal:')) {
-							// Use 'b' for bold style
-							printer.align('lt').style('b').text(line).style('normal');
-						} else {
-							printer.align('lt').text(line);
-						}
+					const printer = new Printer(adapter, {
+						encoding: 'GB18030',
+						width: config.receipt.paperWidth
 					});
 
-					// Cut paper and close
-					printer
-						.feed(2)
-						.cut()
-						.close();
-
-					// Give it a moment to finish printing
-					setTimeout(() => {
-						resolve({
-							success: true,
-							message: 'Receipt printed successfully'
+					try {
+						// Print each line
+						receiptLines.forEach(line => {
+							// Check if line should be centered (headers, footers)
+							if (line.includes('='.repeat(10)) ||
+								line.includes('Thank you') ||
+								line.includes('Please come') ||
+								(config.receipt.storeName && line.includes(config.receipt.storeName))) {
+								printer.align('ct').text(line);
+							} else if (line.startsWith('TOTAL:') || line.startsWith('Subtotal:')) {
+								// Use 'b' for bold style
+								printer.align('lt').style('b').text(line).style('normal');
+							} else {
+								printer.align('lt').text(line);
+							}
 						});
-					}, 500);
-				} catch (printError) {
-					reject(new Error(`Printing failed: ${printError.message}`));
-				}
-			});
-		} catch (error) {
-			reject(error);
-		}
-	});
+
+						// Cut paper and close
+						printer
+							.feed(2)
+							.cut()
+							.close();
+
+						// Give it a moment to finish printing, then reset
+						setTimeout(() => {
+							clearTimeout(timeout);
+							// Reset connection for clean state
+							resetPrinter();
+							resolve({
+								success: true,
+								message: 'Receipt printed successfully'
+							});
+						}, 1000);
+					} catch (printError) {
+						clearTimeout(timeout);
+						resetPrinter();
+						reject(new Error(`Printing failed: ${printError.message}`));
+					}
+				});
+			} catch (openError) {
+				clearTimeout(timeout);
+				resetPrinter();
+				reject(new Error(`Failed to open adapter: ${openError.message}`));
+			}
+		});
+	} catch (error) {
+		resetPrinter();
+		throw error;
+	}
 }
 
 /**
@@ -88,12 +107,12 @@ async function printTest() {
 			{
 				product_name: 'Test Product 1',
 				quantity: 2,
-				price: 10.50
+				sell_price: 10.50
 			},
 			{
 				product_name: 'Test Product 2',
 				quantity: 1,
-				price: 25.00
+				sell_price: 25.00
 			}
 		],
 		subtotal: 46.00,

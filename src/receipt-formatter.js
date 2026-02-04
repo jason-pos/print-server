@@ -34,7 +34,8 @@ function createLine(left, right, width) {
  * Format currency
  */
 function formatCurrency(amount) {
-	return 'RM ' + parseFloat(amount).toFixed(2);
+	const currencySymbol = config.receipt?.currencySymbol || 'RM';
+	return currencySymbol + ' ' + parseFloat(amount).toFixed(2);
 }
 
 /**
@@ -98,8 +99,8 @@ function formatReceipt(orderData) {
 		const itemName = fitText(item.product_name || item.name || `Item ${index + 1}`, width);
 		lines.push(itemName);
 
-		const qty = parseFloat(item.quantity || 1);
-		const price = parseFloat(item.sell_price || 0);
+		const qty = parseFloat(item.quantity || 1) || 1;
+		const price = parseFloat(item.sell_price || 0) || 0;
 		const total = qty * price;
 
 		const qtyText = `${qty} x ${formatCurrency(price)}`;
@@ -167,8 +168,10 @@ function formatReceipt(orderData) {
 
 	// Footer
 	lines.push('');
-	lines.push(centerText('Thank you for your purchase!', width));
-	lines.push(centerText('Please come again', width));
+	const footerLine1 = config.receipt?.footerLine1 || 'Thank you for your purchase!';
+	const footerLine2 = config.receipt?.footerLine2 || 'Please come again';
+	lines.push(centerText(footerLine1, width));
+	lines.push(centerText(footerLine2, width));
 	lines.push('');
 
 	if (orderData.footer_message) {

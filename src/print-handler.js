@@ -1,12 +1,94 @@
 const { Printer } = require('morden-node-escpos');
-const { initPrinter, resetPrinter } = require('./printer.js');
+const { initPrinter, resetPrinter, openAdapter } = require('./printer.js');
 const { formatReceipt } = require('./receipt-formatter.js');
 const { config } = require('./config.js');
+const {
+	RECEIPT_PRINT_TIMEOUT,
+	POST_PRINT_DELAY,
+	RETRY_BASE_DELAY,
+	MAX_RETRY_ATTEMPTS
+} = require('./constants.js');
 
 /**
- * Print receipt
+ * Sleep utility for retry delays
  */
-async function printReceipt(orderData) {
+function sleep(ms) {
+	return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Determine if error is transient (retryable) or permanent
+ */
+function isTransientError(error) {
+	const message = error.message.toLowerCase();
+
+	// Transient errors that can be retried
+	const transientPatterns = [
+		'timeout',
+		'busy',
+		'eagain',
+		'ebusy',
+		'failed to open',
+		'connection',
+		'i/o error'
+	];
+
+	return transientPatterns.some(pattern => message.includes(pattern));
+}
+
+/**
+ * Retry wrapper with exponential backoff
+ * @param {Function} operation - Async operation to retry
+ * @param {number} maxRetries - Maximum retry attempts (default: 3)
+ * @param {string} operationName - Name for logging
+ */
+async function retryWithBackoff(operation, maxRetries = 3, operationName = 'operation') {
+	let lastError;
+
+	for (let attempt = 0; attempt <= maxRetries; attempt++) {
+		try {
+			if (attempt > 0) {
+				const delay = Math.pow(2, attempt - 1) * RETRY_BASE_DELAY; // 1s, 2s, 4s
+				console.log(`[Retry ${attempt}/${maxRetries}] Retrying ${operationName} after ${delay}ms delay...`);
+				console.log(`[Retry ${attempt}/${maxRetries}] Previous error: ${lastError.message}`);
+
+				// Reset printer connection before retry
+				resetPrinter();
+
+				// Wait before retry
+				await sleep(delay);
+			}
+
+			// Execute operation
+			const result = await operation();
+
+			if (attempt > 0) {
+				console.log(`[Retry ${attempt}/${maxRetries}] ${operationName} succeeded after retry`);
+			}
+
+			return result;
+		} catch (error) {
+			lastError = error;
+
+			// Check if error is permanent (non-retryable)
+			if (!isTransientError(error)) {
+				console.error(`[Retry] Permanent error detected, not retrying: ${error.message}`);
+				throw error;
+			}
+
+			// If we've exhausted retries, throw the last error
+			if (attempt === maxRetries) {
+				console.error(`[Retry] Max retries (${maxRetries}) reached for ${operationName}`);
+				throw new Error(`Print operation failed after ${maxRetries} retries: ${lastError.message}`);
+			}
+		}
+	}
+}
+
+/**
+ * Core print operation (without retry logic)
+ */
+async function printReceiptCore(orderData) {
 	let adapter = null;
 
 	try {
@@ -21,76 +103,85 @@ async function printReceipt(orderData) {
 			console.log(receiptLines.join('\n'));
 		}
 
-		// Open adapter and print
-		return new Promise((resolve, reject) => {
-			const timeout = setTimeout(() => {
+		// Create timeout promise with clearable timer
+		let timeoutId;
+		const timeoutPromise = new Promise((_, reject) => {
+			timeoutId = setTimeout(() => {
 				resetPrinter();
 				reject(new Error('Print operation timeout'));
-			}, 15000);
+			}, RECEIPT_PRINT_TIMEOUT);
+		});
 
+		// Create print operation promise
+		const printOperation = async () => {
 			try {
-				adapter.open(function(error) {
-					if (error) {
-						clearTimeout(timeout);
-						resetPrinter();
-						reject(new Error(`Failed to open printer: ${error.message}`));
-						return;
-					}
+				// Open adapter with async/await
+				await openAdapter(adapter);
 
-					const printer = new Printer(adapter, {
-						encoding: 'GB18030',
-						width: config.receipt.paperWidth
-					});
+				const printer = new Printer(adapter, {
+					encoding: config.receipt?.encoding || 'GB18030',
+					width: config.receipt.paperWidth
+				});
 
-					try {
-						// Print each line
-						receiptLines.forEach(line => {
-							// Check if line should be centered (headers, footers)
-							if (line.includes('='.repeat(10)) ||
-								line.includes('Thank you') ||
-								line.includes('Please come') ||
-								(config.receipt.storeName && line.includes(config.receipt.storeName))) {
-								printer.align('ct').text(line);
-							} else if (line.startsWith('TOTAL:') || line.startsWith('Subtotal:')) {
-								// Use 'b' for bold style
-								printer.align('lt').style('b').text(line).style('normal');
-							} else {
-								printer.align('lt').text(line);
-							}
-						});
-
-						// Cut paper and close
-						printer
-							.feed(2)
-							.cut()
-							.close();
-
-						// Give it a moment to finish printing, then reset
-						setTimeout(() => {
-							clearTimeout(timeout);
-							// Reset connection for clean state
-							resetPrinter();
-							resolve({
-								success: true,
-								message: 'Receipt printed successfully'
-							});
-						}, 1000);
-					} catch (printError) {
-						clearTimeout(timeout);
-						resetPrinter();
-						reject(new Error(`Printing failed: ${printError.message}`));
+				// Print each line
+				receiptLines.forEach(line => {
+					// Check if line should be centered (headers, footers)
+					if (line.includes('='.repeat(10)) ||
+						line.includes('Thank you') ||
+						line.includes('Please come') ||
+						(config.receipt.storeName && line.includes(config.receipt.storeName))) {
+						printer.align('ct').text(line);
+					} else if (line.startsWith('TOTAL:') || line.startsWith('Subtotal:')) {
+						// Use 'b' for bold style
+						printer.align('lt').style('b').text(line).style('normal');
+					} else {
+						printer.align('lt').text(line);
 					}
 				});
-			} catch (openError) {
-				clearTimeout(timeout);
+
+				// Cut paper and close
+				printer
+					.feed(2)
+					.cut()
+					.close();
+
+				// Give it a moment to finish printing
+				await new Promise(resolve => setTimeout(resolve, POST_PRINT_DELAY));
+
+				// Reset connection for clean state
 				resetPrinter();
-				reject(new Error(`Failed to open adapter: ${openError.message}`));
+
+				return {
+					success: true,
+					message: 'Receipt printed successfully'
+				};
+			} catch (error) {
+				resetPrinter();
+				throw error;
 			}
-		});
+		};
+
+		// Race between print operation and timeout
+		return await Promise.race([
+			printOperation().then(res => { clearTimeout(timeoutId); return res; }),
+			timeoutPromise
+		]);
 	} catch (error) {
 		resetPrinter();
 		throw error;
 	}
+}
+
+/**
+ * Print receipt with retry mechanism
+ * This is the main entry point for printing
+ */
+async function printReceipt(orderData) {
+	return retryWithBackoff(
+		() => printReceiptCore(orderData),
+		MAX_RETRY_ATTEMPTS,
+		'printReceipt'
+	);
 }
 
 /**

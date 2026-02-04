@@ -19,9 +19,6 @@ services:
     devices:
       - /dev/bus/usb:/dev/bus/usb
 
-    # Privileged mode for USB access (required for thermal printers)
-    privileged: true
-
     # Volume mounts
     volumes:
       # Mount .env for configuration
@@ -29,8 +26,9 @@ services:
       # Persist logs (optional)
       - ./logs:/app/logs
 
-    # Network mode
-    network_mode: bridge
+    # Network
+    networks:
+      - xipos-network
 
     # Resource limits (optional)
     deploy:
@@ -64,6 +62,5 @@ services:
         max-file: "3"
 
 networks:
-  default:
-    name: xipos-network
-    external: false
+  xipos-network:
+    external: true

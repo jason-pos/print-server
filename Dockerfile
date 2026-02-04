@@ -37,7 +37,6 @@ EXPOSE 3344
 
 USER nodejs
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:3344/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+# HEALTHCHECK defined in docker-compose.yml
 
 CMD ["node", "src/server.js"]

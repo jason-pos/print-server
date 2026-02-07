@@ -9,7 +9,7 @@ const config = {
         host: process.env.HOST || "0.0.0.0",
     },
     auth: {
-        apiKey: process.env.API_KEY || "",
+        apiKey: (process.env.API_KEY || "").trim(),
     },
     printer: {
         type: process.env.PRINTER_TYPE || "usb",

@@ -35,6 +35,9 @@ function createLine(left, right, width) {
  */
 function formatCurrency(amount) {
 	const currencySymbol = config.receipt?.currencySymbol || 'RM';
+	if (amount === null || amount === undefined || isNaN(Number(amount))) {
+		return currencySymbol + ' 0.00';
+	}
 	return currencySymbol + ' ' + parseFloat(amount).toFixed(2);
 }
 

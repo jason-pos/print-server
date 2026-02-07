@@ -9,7 +9,7 @@ services:
 
     # Port mapping
     ports:
-      - "${PORT:-3344}:3344"
+      - "127.0.0.1:${PORT:-3344}:3344"
 
     # Environment variables from .env file
     env_file:

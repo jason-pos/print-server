@@ -4,7 +4,7 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const { config } = require('./config.js');
 const { printReceipt, printTest } = require('./print-handler.js');
-const { testPrinter, closePrinter } = require('./printer.js');
+const { testPrinter, closePrinter, getPrinter } = require('./printer.js');
 
 // Global error handlers for graceful shutdown
 let serverInstance = null;
@@ -64,7 +64,15 @@ const app = express();
 
 // Middleware
 app.use(helmet({
-	contentSecurityPolicy: false,
+	contentSecurityPolicy: {
+		directives: {
+			defaultSrc: ["'self'"],
+			scriptSrc: ["'self'"],
+			styleSrc: ["'self'", "'unsafe-inline'"],
+			imgSrc: ["'self'"],
+			connectSrc: ["'self'"],
+		}
+	},
 	crossOriginEmbedderPolicy: false
 }));
 app.use(cors({
@@ -143,9 +151,16 @@ const testLimiter = rateLimit({
 
 // Health check endpoint
 app.get('/health', (req, res) => {
+	const printerConnected = !!getPrinter();
+	const printerType = config.printer.type || 'none';
+
 	res.json({
-		status: 'ok',
-		timestamp: new Date().toISOString()
+		status: printerConnected ? 'ok' : 'degraded',
+		timestamp: new Date().toISOString(),
+		printer: {
+			connected: printerConnected,
+			type: printerType
+		}
 	});
 });
 

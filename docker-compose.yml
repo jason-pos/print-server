@@ -64,3 +64,4 @@ services:
 networks:
   xipos-network:
     external: true
+    name: docker_xipos-network
